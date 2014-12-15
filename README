@@ -1,5 +1,5 @@
 NAME
-    Acme::Math::XS - Math is HARD (faster)
+    Alt::Acme::Math::XS::ZillaDist - Math is HARD (faster using Zilla::Dist)
 
 SYNOPSIS
         use Acme::Math::XS;
@@ -7,7 +7,8 @@ SYNOPSIS
         print "2 + 2 = ${\add(2, 2)}\n";
 
 DESCRIPTION
-    This is the smallest possible XS module written with Inline::C.
+    This is the smallest possible XS module written with Inline::C. This
+    dist is released using Zilla::Dist.
 
 AUTHORS
     *   Ingy döt Net <ingy@cpan.org>

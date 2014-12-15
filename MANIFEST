@@ -9,7 +9,16 @@ Makefile.PL
 README
 lib/Acme/Math/XS.pm
 lib/Acme/Math/XS.pod
+lib/Acme/Math/XS/Inline.pm
 lib/Alt/Acme/Math/XS/ZillaDist.pm
+lib/Alt/Acme/Math/XS/ZillaDist.pod
 t/000-compile-modules.t
 t/release-pod-syntax.t
 t/test.t
+lib/Acme/Math/XS/Inline.pm
+inc/Acme/Math/XS/Inline.pm
+inc/Inline.pm
+inc/Inline/denter.pm
+inc/Inline/Module.pm
+inc/Inline/C.pm
+inc/Inline/C/Parser/RegExp.pm
