@@ -1,14 +1,15 @@
 use strict; use warnings;
 package Inline::Module;
-our $VERSION = '0.25';
+our $VERSION = '0.30';
 our $API_VERSION = 'v2';
 
-use Config();
-use File::Path();
-use File::Find();
 use Carp 'croak';
+use Config();
+use File::Find();
+use File::Path();
+use File::Spec();
 
-my $inline_build_path = './blib/Inline';
+my $inline_build_path = '.inline';
 
 use constant DEBUG_ON => $ENV{PERL_INLINE_MODULE_DEBUG} ? 1 : 0;
 sub DEBUG { if (DEBUG_ON) { print "DEBUG >>> ", sprintf(@_), "\n" }}
@@ -25,8 +26,9 @@ sub import {
     DEBUG_ON && DEBUG "Inline::Module::import(@_)";
 
     my ($stub_module, $program) = caller;
+    $program =~ s!.*[\\\/]!!;
 
-    if ($program eq 'Makefile.PL' && not -e 'INLINE.h') {
+    if ($program eq "Makefile.PL" and not -e 'INLINE.h') {
         $class->check_inc_inc($program);
         no warnings 'once';
         *MY::postamble = \&postamble;
@@ -43,12 +45,12 @@ sub import {
         if $cmd eq 'stub';
     return $class->handle_autostub(@_)
         if $cmd eq 'autostub';
+    return $class->handle_makestub(@_)
+        if $cmd eq 'makestub';
     return $class->handle_distdir(@ARGV)
         if $cmd eq 'distdir';
     return $class->handle_fixblib()
         if $cmd eq 'fixblib';
-    return $class->handle_makestub(@_)
-        if $cmd eq 'makestub';
 
     die "Unknown Inline::Module::import argument '$cmd'"
 }
@@ -127,7 +129,14 @@ sub postamble {
     my $stub_modules = $meta->{stub};
     my $included_modules = $class->included_modules($meta);
 
+    if ($meta->{makestub} and not -e 'inc' and not -e 'INLINE.h') {
+        $class->make_stub_modules(@{$meta->{stub}});
+    }
+
     my $section = <<"...";
+clean ::
+\t- \$(RM_RF) $inline_build_path
+
 distdir : distdir_inline
 
 distdir_inline : create_distdir
@@ -137,10 +146,10 @@ pure_all ::
 ...
     for my $module (@$code_modules) {
         $section .=
-            "\t\$(NOECHO) \$(ABSPERLRUN) -Iinc -Ilib -e 'use $module'\n";
+            "\t\$(NOECHO) \$(ABSPERLRUN) -Iinc -Ilib -M$module -e 1 --\n";
     }
     $section .=
-        "\t\$(NOECHO) \$(ABSPERLRUN) -Iinc -MInline::Module=fixblib -e 1";
+        "\t\$(NOECHO) \$(ABSPERLRUN) -Iinc -MInline::Module=fixblib -e 1 --\n";
 
     return $section;
 }
@@ -168,13 +177,8 @@ sub handle_makestub {
             croak "Unknown 'makestub' argument: '$arg'";
         }
     }
-    my $dest = 'lib';
 
-    for my $module (@modules) {
-        my $code = $class->proxy_module($module);
-        my $path = $class->write_module($dest, $module, $code);
-        print "Created stub module '$path' (Inline::Module $VERSION)\n";
-    }
+    $class->make_stub_modules(@modules);
 
     exit 0;
 }
@@ -284,11 +288,14 @@ sub included_modules {
             'Inline::C::Parser::RegExp';
     }
     if (grep /:CPP$/, @$ilsm) {
-        push @$include,
+        push @$include, (
             'Inline::C',
             'Inline::CPP::Config',
             'Inline::CPP::Parser::RecDescent',
-            'Parse::RecDescent';
+            'Parse::RecDescent',
+            'ExtUtils::CppGuess',
+            'Capture::Tiny',
+        );
     }
     return $include;
 }
@@ -302,10 +309,14 @@ sub add_to_distdir {
         $code = $class->proxy_module($module);
         $class->write_module("$distdir/inc", $module, $code);
         $module =~ s!::!/!g;
-        push @$manifest, "lib/$module.pm", "inc/$module.pm";
+        push @$manifest, "lib/$module.pm"
+            unless -e "lib/$module.pm";
+        push @$manifest, "inc/$module.pm";
     }
     for my $module (@$included_modules) {
-        my $code = $class->read_local_module($module);
+        my $code = $module eq 'Inline::CPP::Config'
+        ? $class->read_share_cpp_config
+        : $class->read_local_module($module);
         $class->write_module("$distdir/inc", $module, $code);
         $module =~ s!::!/!g;
         push @$manifest, "inc/$module.pm";
@@ -316,17 +327,32 @@ sub add_to_distdir {
     return $manifest; # return a list of the files added
 }
 
+sub make_stub_modules {
+    my ($class, @modules) = @_;
+
+    for my $module (@modules) {
+        my $code = $class->proxy_module($module);
+        my $path = $class->write_module('lib', $module, $code, 'onchange');
+        if ($path) {
+            print "Created stub module '$path' (Inline::Module $VERSION)\n";
+        }
+    }
+}
+
 sub read_local_module {
     my ($class, $module) = @_;
     eval "require $module; 1" or die $@;
     my $file = $module;
     $file =~ s!::!/!g;
-    my $filepath = $INC{"$file.pm"};
-    open IN, '<', $filepath
-        or die "Can't open '$filepath' for input:\n$!";
-    my $code = do {local $/; <IN>};
-    close IN;
-    return $code;
+    $class->read_file($INC{"$file.pm"});
+}
+
+sub read_share_cpp_config {
+    my ($class) = @_;
+    require File::Share;
+    my $dir = File::Share::dist_dir('Inline-Module');
+    my $path = File::Spec->catfile($dir, 'CPPConfig.pm');
+    $class->read_file($path);
 }
 
 sub proxy_module {
@@ -372,8 +398,20 @@ bootstrap $module;
 # bootstrap $module \$VERSION;
 }
 
+sub read_file {
+    my ($class, $filepath) = @_;
+    open IN, '<', $filepath
+        or die "Can't open '$filepath' for input:\n$!";
+    my $code = do {local $/; <IN>};
+    close IN;
+    return $code;
+}
+
 sub write_module {
-    my ($class, $dest, $module, $code) = @_;
+    my ($class, $dest, $module, $code, $onchange) = @_;
+    $onchange ||= 0;
+
+    $code =~ s/\n+__END__\n.*//s;
 
     my $filepath = $module;
     $filepath =~ s!::!/!g;
@@ -381,6 +419,10 @@ sub write_module {
     my $dirpath = $filepath;
     $dirpath =~ s!(.*)/.*!$1!;
     File::Path::mkpath($dirpath);
+
+    return if $onchange and
+        -e $filepath and
+        $class->read_file($filepath) eq $code;
 
     unlink $filepath;
     open OUT, '>', $filepath
@@ -403,6 +445,38 @@ sub add_to_manifest {
         }
         close $out;
     }
+}
+
+sub smoke_system_info_dump {
+    my ($class, @msg) = @_;
+    my $msg = sprintf(@msg);
+    chomp $msg;
+    require Data::Dumper;
+    local $Data::Dumper::Sortkeys = 1;
+    local $Data::Dumper::Terse = 1;
+    local $Data::Dumper::Indent = 1;
+
+    my @path_files;
+    File::Find::find({
+        wanted => sub {
+            push @path_files, $File::Find::name if -f;
+        },
+    }, File::Spec->path());
+    my $dump = Data::Dumper::Dumper(
+        {
+            'ENV' => \%ENV,
+            'Config' => \%Config::Config,
+            'Path Files' => \@path_files,
+        },
+    );
+    Carp::confess <<"..."
+Error: $msg
+
+System Data:
+$dump
+
+Error: $msg
+...
 }
 
 1;

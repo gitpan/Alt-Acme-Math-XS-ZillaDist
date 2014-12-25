@@ -1,3 +1,6 @@
+0.0.4 Wed Dec 24 23:57:24 PST 2014
+ - Build in .inline
+
 0.0.3 Thu Dec 18 11:00:45 PST 2014
  - Build with Inline::Module 0.25
 
