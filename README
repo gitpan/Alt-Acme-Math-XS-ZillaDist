@@ -1,5 +1,5 @@
 NAME
-    Acme::Math::XS - Math is HARD (faster!)
+    Alt::Acme::Math::XS::ZillaDist - Math is HARD (faster)
 
 SYNOPSIS
         use Acme::Math::XS;
@@ -15,7 +15,7 @@ DESCRIPTION
     CPAN module frameworks.
 
     The source code for all these modules is in one git repository, on
-    separate branches: <https://github.com/ingydotnet/acme-math-xs-pm>
+    separate branches:
 
 SEE
     Acme::Math::XS
@@ -45,12 +45,12 @@ SEE
         ExtUtils::MakeMaker.
 
 AUTHORS
-    *   Ingy döt Net <ingy@cpan.org>
+    Ingy döt Net <ingy@cpan.org>
 
-    *   David Oswald <davido@cpan.org>
+    David Oswald <davido@cpan.org>
 
-COPYRIGHT
-    Copyright 2014. Ingy döt Net.
+COPYRIGHT AND LICENSE
+    Copyright 2014-2015. Ingy döt Net.
 
     This program is free software; you can redistribute it and/or modify it
     under the same terms as Perl itself.

@@ -16,8 +16,3 @@ t/000-compile-modules.t
 t/release-pod-syntax.t
 t/test.t
 inc/Acme/Math/XS/Inline.pm
-inc/Inline.pm
-inc/Inline/denter.pm
-inc/Inline/Module.pm
-inc/Inline/C.pm
-inc/Inline/C/Parser/RegExp.pm
